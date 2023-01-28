@@ -19,7 +19,7 @@ func TestNewConnection(t *testing.T) {
 	go broker.Run()
 	defer broker.Stop()
 
-	time.Sleep(1000)
+	time.Sleep(time.Second)
 	_, err := websocket.Dial(url, "", origin)
 
 	if err != nil {
@@ -37,7 +37,7 @@ func TestSubscription(t *testing.T) {
 	go broker.Run()
 	defer broker.Stop()
 
-	time.Sleep(1000)
+	time.Sleep(time.Second)
 	ws, err := websocket.Dial(url, "", origin)
 
 	if err != nil {
@@ -70,7 +70,7 @@ func TestPublish(t *testing.T) {
 	go broker.Run()
 	defer broker.Stop()
 
-	time.Sleep(1000)
+	time.Sleep(time.Second)
 	ws1, err := websocket.Dial(url, "", origin)
 	ws2, err := websocket.Dial(url, "", origin)
 
@@ -94,7 +94,7 @@ func TestPublish(t *testing.T) {
 	if n, err := ws1.Read(messageBuffer); err != nil {
 		t.Errorf("Read")
 	} else {
-		fmt.Printf("[Client] %s\n", messageBuffer[:n])
+		fmt.Printf("[Client 1] %s\n", messageBuffer[:n])
 	}
 
 	// publish
@@ -109,6 +109,6 @@ func TestPublish(t *testing.T) {
 	if n, err := ws1.Read(messageBuffer); err != nil {
 		t.Errorf("Read")
 	} else {
-		fmt.Printf("[Client] %s\n", messageBuffer[:n])
+		fmt.Printf("[Client 1] %s\n", messageBuffer[:n])
 	}
 }

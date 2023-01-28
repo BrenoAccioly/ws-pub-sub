@@ -1,9 +1,6 @@
 package broker
 
 import (
-	"crypto/rand"
-	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -11,43 +8,20 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-type Message struct {
-	data []byte
-}
-
-type MessageJson struct {
-	Action string
-	Data   string
-}
-
-type Connection struct {
-	ID   int64
-	Conn *websocket.Conn
-}
-
-func NewConnection(ws *websocket.Conn) Connection {
-	var n int64
-	binary.Read(rand.Reader, binary.LittleEndian, &n)
-	conn := Connection{}
-	conn.ID = n
-	conn.Conn = ws
-	return conn
-}
-
 type Broker struct {
 	pathPattern string
 	port        string
 	server      http.Server
-	connections map[int64]Connection
-	topics      map[string][]int64
+	connections map[UUID]Connection
+	topics      map[string][]UUID
 }
 
 func NewBroker() Broker {
 	broker := Broker{}
 	broker.pathPattern = "/ws"
 	broker.port = ":5000"
-	broker.connections = make(map[int64]Connection)
-	broker.topics = make(map[string][]int64)
+	broker.connections = make(map[UUID]Connection)
+	broker.topics = make(map[string][]UUID)
 	return broker
 }
 
@@ -55,14 +29,13 @@ func (broker Broker) ConnectionsSize() int {
 	return len(broker.connections)
 }
 
-// publish to all connections
 func (broker Broker) broadcast(message Message) {
 	for _, conn := range broker.connections {
 		conn.Conn.Write(message.data)
 	}
 }
 
-func (broker Broker) NewSubscription(connID int64, topic string) {
+func (broker Broker) NewSubscription(connID UUID, topic string) {
 	fmt.Println("[Server] Received new subscription")
 	if !slices.Contains(broker.topics[topic], connID) {
 		broker.topics[topic] = append(broker.topics[topic], connID)
@@ -72,17 +45,10 @@ func (broker Broker) NewSubscription(connID int64, topic string) {
 
 func (broker Broker) publish(data []byte) {
 	fmt.Println("[Server] Received publish")
-	topic := ""
-	i := 0
-	for _, c := range data {
-		if c == '|' {
-			break
-		}
-		topic += string(c)
-		i++
-	}
-	payload := data[i+1:]
-	connIDs, ok := broker.topics[topic]
+
+	topic, payload := GetTopicAndPayload(data)
+
+	connIDs, ok := broker.topics[string(topic)]
 	if ok {
 		for _, id := range connIDs {
 			fmt.Printf("[Server] sent to %d\n", id)
@@ -91,14 +57,23 @@ func (broker Broker) publish(data []byte) {
 	}
 }
 
+func (broker *Broker) handleMessageJson(id UUID, messageJson MessageJson) {
+	switch messageJson.Action {
+	case "subscribe":
+		broker.NewSubscription(id, messageJson.Data)
+	case "publish":
+		broker.publish([]byte(messageJson.Data))
+	case "unsubscribe":
+	default:
+	}
+}
+
 func (broker *Broker) handleConnection(ws *websocket.Conn) {
 	conn := NewConnection(ws)
 	broker.connections[conn.ID] = conn
-
 	//broker.broadcast(Message{[]byte("New connection Received")})
 
 	for {
-
 		messageBuffer := make([]byte, 512)
 		n, err := ws.Read(messageBuffer)
 
@@ -108,18 +83,10 @@ func (broker *Broker) handleConnection(ws *websocket.Conn) {
 
 		fmt.Printf("[Server] received: %s\n", messageBuffer)
 
-		var messageJson MessageJson
-		err = json.Unmarshal(messageBuffer[:n], &messageJson)
+		messageJson, err := NewMessageJsonFromBytes(messageBuffer[:n])
 
-		switch messageJson.Action {
-		case "subscribe":
-			broker.NewSubscription(conn.ID, messageJson.Data)
-		case "publish":
-			broker.publish([]byte(messageJson.Data))
-		default:
-		}
+		broker.handleMessageJson(conn.ID, messageJson)
 	}
-
 }
 
 func (broker *Broker) Run() error {
