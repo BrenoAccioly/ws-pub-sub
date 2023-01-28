@@ -1,7 +1,6 @@
 package broker
 
 import (
-	"log"
 	"testing"
 
 	broker "github.com/BrenoAccioly/ws-pub-sub"
@@ -14,8 +13,8 @@ var url string = "ws://localhost:5000/ws"
 func TestNewConnection(t *testing.T) {
 	broker := broker.NewBroker()
 
-	defer broker.Stop()
 	go broker.Run()
+	defer broker.Stop()
 
 	_, err := websocket.Dial(url, "", origin)
 
@@ -31,8 +30,8 @@ func TestNewConnection(t *testing.T) {
 func TestMessageBroadcast(t *testing.T) {
 	broker := broker.NewBroker()
 
-	defer broker.Stop()
 	go broker.Run()
+	defer broker.Stop()
 
 	ws, err := websocket.Dial(url, "", origin)
 
@@ -41,9 +40,9 @@ func TestMessageBroadcast(t *testing.T) {
 	}
 
 	var msg = make([]byte, 512)
-	var n int
-	if n, err = ws.Read(msg); err != nil {
+	//var n int
+	if _, err = ws.Read(msg); err != nil {
 		t.Errorf("Read")
 	}
-	log.Fatalf("Received: %s.\n", msg[:n])
+	//log.Fatalf("Received: %s.\n", msg[:n])
 }

@@ -12,11 +12,16 @@ type Message struct {
 }
 
 type Broker struct {
+	pathPattern string
+	port        string
+	server      http.Server
 	connections []websocket.Conn
 }
 
 func NewBroker() Broker {
 	broker := Broker{}
+	broker.pathPattern = "/ws"
+	broker.port = ":5000"
 	broker.connections = make([]websocket.Conn, 0)
 	return broker
 }
@@ -37,18 +42,28 @@ func (broker *Broker) handleConnection(ws *websocket.Conn) {
 	broker.broadcast(Message{[]byte("New connection Received")})
 }
 
-func (broker *Broker) Run() {
+func (broker *Broker) Run() error {
 	fmt.Println("Started server...")
 
-	http.Handle("/ws", websocket.Handler(broker.handleConnection))
+	serveMux := http.NewServeMux()
+	serveMux.Handle(
+		broker.pathPattern,
+		websocket.Handler(broker.handleConnection),
+	)
 
-	err := http.ListenAndServe(":5000", nil)
+	broker.server = http.Server{Addr: broker.port, Handler: serveMux}
 
-	if err != nil {
-		panic("ListenAndServe: " + err.Error())
-	}
+	err := broker.server.ListenAndServe()
+
+	return err
 }
 
 func (broker *Broker) Stop() {
-	// TODO
+	broker.server.Close()
+
+	for _, conn := range broker.connections {
+		conn.Close()
+	}
+
+	fmt.Println("Closed server...")
 }
