@@ -1,9 +1,12 @@
 package broker
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
-	broker "github.com/BrenoAccioly/ws-pub-sub"
+	bk "github.com/BrenoAccioly/ws-pub-sub"
 	"golang.org/x/net/websocket"
 )
 
@@ -11,15 +14,16 @@ var origin string = "http://localhost/"
 var url string = "ws://localhost:5000/ws"
 
 func TestNewConnection(t *testing.T) {
-	broker := broker.NewBroker()
+	broker := bk.NewBroker()
 
 	go broker.Run()
 	defer broker.Stop()
 
+	time.Sleep(1000)
 	_, err := websocket.Dial(url, "", origin)
 
 	if err != nil {
-		t.Errorf("Connection Failed")
+		t.Errorf("Connection Failed: %s", err)
 	}
 
 	if broker.ConnectionsSize() != 1 {
@@ -27,22 +31,84 @@ func TestNewConnection(t *testing.T) {
 	}
 }
 
-func TestMessageBroadcast(t *testing.T) {
-	broker := broker.NewBroker()
+func TestSubscription(t *testing.T) {
+	broker := bk.NewBroker()
 
 	go broker.Run()
 	defer broker.Stop()
 
+	time.Sleep(1000)
 	ws, err := websocket.Dial(url, "", origin)
 
 	if err != nil {
-		t.Errorf("Connection Failed")
+		t.Errorf("Connection Failed: %s", err)
 	}
 
-	var msg = make([]byte, 512)
-	//var n int
-	if _, err = ws.Read(msg); err != nil {
-		t.Errorf("Read")
+	var messageBuffer = make([]byte, 512)
+
+	// subscribe
+
+	messageJson := bk.MessageJson{
+		Action: "subscribe", Data: "topic1",
 	}
-	//log.Fatalf("Received: %s.\n", msg[:n])
+
+	messageJsonBytes, _ := json.Marshal(messageJson)
+	ws.Write(messageJsonBytes)
+
+	// subcription success
+
+	if n, err := ws.Read(messageBuffer); err != nil {
+		t.Errorf("Read")
+	} else {
+		fmt.Printf("[Client] %s", messageBuffer[:n])
+	}
+}
+
+func TestPublish(t *testing.T) {
+	broker := bk.NewBroker()
+
+	go broker.Run()
+	defer broker.Stop()
+
+	time.Sleep(1000)
+	ws1, err := websocket.Dial(url, "", origin)
+	ws2, err := websocket.Dial(url, "", origin)
+
+	if err != nil {
+		t.Errorf("Connection Failed: %s", err)
+	}
+
+	var messageBuffer = make([]byte, 512)
+
+	// subscribe
+
+	messageJson := bk.MessageJson{
+		Action: "subscribe", Data: "topic1",
+	}
+
+	messageJsonBytes, _ := json.Marshal(messageJson)
+	ws1.Write(messageJsonBytes)
+
+	// subcription success
+
+	if n, err := ws1.Read(messageBuffer); err != nil {
+		t.Errorf("Read")
+	} else {
+		fmt.Printf("[Client] %s\n", messageBuffer[:n])
+	}
+
+	// publish
+
+	messageJson = bk.MessageJson{
+		Action: "publish", Data: "topic1|hello",
+	}
+
+	messageJsonBytes, _ = json.Marshal(messageJson)
+	ws2.Write(messageJsonBytes)
+
+	if n, err := ws1.Read(messageBuffer); err != nil {
+		t.Errorf("Read")
+	} else {
+		fmt.Printf("[Client] %s\n", messageBuffer[:n])
+	}
 }
